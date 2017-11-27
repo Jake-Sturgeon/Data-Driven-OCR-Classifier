@@ -12,6 +12,7 @@ version: v1.0
 import numpy as np
 import utils.utils as utils
 import scipy.linalg
+from scipy.stats import multivariate_normal
 
 
 def principal_components(X,num):
@@ -119,10 +120,12 @@ def process_training_data(train_page_names):
     model_data['bbox_size'] = bbox_size
 
     print('Reducing to 10 dimensions')
+
     v = principal_components(fvectors_train_full, 10)
+    reduced = np.dot((fvectors_train_full - np.mean(fvectors_train_full)), v)
     model_data['v'] = v.tolist()
     model_data['mean'] = np.mean(fvectors_train_full).tolist()
-    model_data['fvectors_train'] = np.dot((fvectors_train_full - np.mean(fvectors_train_full)), v).tolist()
+    model_data['fvectors_train'] = reduced.tolist()
 
     return model_data
 
@@ -158,26 +161,24 @@ def classify_page(page, model):
     fvectors_train = np.array(model['fvectors_train'])
     labels_train = np.array(model['labels_train'])
 
-    return classify(fvectors_train, np.expand_dims(labels_train, axis=0), page)
+    return classify(fvectors_train, labels_train, page)
 
-def classify(train, train_labels, test, features=None):
-    """Perform nearest neighbour classification."""
+def classify(train, labels_train, test):
+    lst = sorted(set(labels_train))
+    labels_train = np.expand_dims(labels_train, axis=0)
+    p_list = []
     
-    # Use all feature is no feature parameter has been supplied
-    if features is None:
-        features=np.arange(0, train.shape[1])
-
-    # Select the desired features from the training and test data
-    train = train[:, features]
-    test = test[:, features]
-
-
-    # Super compact implementation of nearest neighbour
-    x= np.dot(test, train.transpose())
-    modtest=np.sqrt(np.sum(test * test, axis=1))
-    modtrain=np.sqrt(np.sum(train * train, axis=1))
-    dist = x / np.outer(modtest, modtrain.transpose()) # cosine distance
-    nearest=np.argmax(dist, axis=1)
-    mdist=np.max(dist, axis=1)
-
-    return train_labels[0, nearest]
+    t = train[labels_train[0,:] == lst[0],:]
+    m = np.mean(t, axis=0)
+    t = t - m
+    cov_global = np.cov(t, rowvar=0)
+    multi = multivariate_normal(mean=m, cov=cov_global)
+    p_list.append(multi.pdf(test))
+    for x in lst[1:]:
+        t = train[labels_train[0,:] == x,:]
+        m = np.mean(t, axis=0)
+        multi = multivariate_normal(mean=m, cov=cov_global)
+        p_list.append(multi.pdf(test))
+    p = np.vstack(tuple(p_list))
+    i = np.argmax(p, axis=0)
+    return labels_train[0, i]
