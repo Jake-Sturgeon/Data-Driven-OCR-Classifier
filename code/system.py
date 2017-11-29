@@ -22,41 +22,6 @@ def principal_components(X,num):
     v = np.fliplr(v)
     return v
 
-def get_ten(X, model):
-    labels = np.array(model['labels_train'])
-    lst = sorted(set(labels))
-    score = np.zeros(X.shape[1])
-    for a, b in [(x,y) for x in range(len(lst)) for y in range(len(lst)) if x < y]:
-    
-        alst = X[labels[:] == lst[a],:]
-        blst = X[labels[:] == lst[b],:]
-        if (alst.shape[0] <= 1 or blst.shape[0] <= 1):
-            continue
-        score = np.add(score, divergence(alst, blst))
-    sorted_score = np.argsort(-score)
-    return sorted_score[0:10]
-
-def divergence(class1, class2):
-    """compute a vector of 1-D divergences
-        
-        class1 - data matrix for class 1, each row is a sample
-        class2 - data matrix for class 2
-        
-        returns: d12 - a vector of 1-D divergence scores
-        """
-    
-    # Compute the mean and variance of each feature vector element
-    m1 = np.mean(class1, axis=0)
-    m2 = np.mean(class2, axis=0)
-    v1 = np.var(class1, axis=0)
-    v2 = np.var(class2, axis=0)
-    # Plug mean and variances into the formula for 1-D divergence.
-    # (Note that / and * are being used to compute multiple 1-D
-    #  divergences without the need for a loop)
-    d12 = 0.5 * (v1 / v2 + v2 / v1 - 2) + 0.5 * ( m1 - m2 ) * (m1 - m2) * (1.0 / v1 + 1.0 / v2)
-    
-    return d12
-
 def get_bounding_box_size(images):
     """Compute bounding box size given list of images."""
     height = max(image.shape[0] for image in images)
@@ -160,25 +125,31 @@ def classify_page(page, model):
     """
     fvectors_train = np.array(model['fvectors_train'])
     labels_train = np.array(model['labels_train'])
+    w, x, y, z = perce_fast(fvectors_train, labels_train, np.zeros((1, fvectors_train.shape[1] + 1)), 0.2)
+    return z
 
-    return classify(fvectors_train, labels_train, page)
-
-def classify(train, labels_train, test):
-    lst = sorted(set(labels_train))
-    labels_train = np.expand_dims(labels_train, axis=0)
-    p_list = []
-    
-    t = train[labels_train[0,:] == lst[0],:]
-    m = np.mean(t, axis=0)
-    t = t - m
-    cov_global = np.cov(t, rowvar=0)
-    multi = multivariate_normal(mean=m, cov=cov_global)
-    p_list.append(multi.pdf(test))
-    for x in lst[1:]:
-        t = train[labels_train[0,:] == x,:]
-        m = np.mean(t, axis=0)
-        multi = multivariate_normal(mean=m, cov=cov_global)
-        p_list.append(multi.pdf(test))
-    p = np.vstack(tuple(p_list))
-    i = np.argmax(p, axis=0)
-    return labels_train[0, i]
+def perce_fast(X, y, w_init, rho):
+    """ perce_fast
+        A more efficient implementation of the perceptron alogorithm
+        For the notebook data this version will work x100 faster!
+        
+        X - the data matrix. Each row represents a separate sample
+        y - a vector of integer class labels corresponding to the rows of X - labels must be +1 or -1
+        w_init - the initial weight vector
+        rho - a scalar learning rate
+        """
+    (N, nfeatures) = X.shape
+    X = np.hstack((X, np.ones((N,1))))
+    nfeatures += 1
+    max_iter = 10000
+    w = w_init
+    iter = 0
+    mis_class = N
+    yy = np.tile(y, (1, nfeatures))
+    while mis_class > 0 and iter < max_iter:
+        iter += 1
+        mc = ((np.dot(X, w.transpose()) * y) >= 0)[:, 0]
+        z = np.dot(X, w.transpose()) * y
+        mis_class = np.sum(mc)
+        w -= rho * (np.sum(yy[mc, :] * X[mc, :], axis=0))
+    return w, iter, mis_class, z
