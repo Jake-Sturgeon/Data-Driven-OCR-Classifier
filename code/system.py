@@ -12,6 +12,7 @@ version: v1.0
 import numpy as np
 import utils.utils as utils
 from scipy import ndimage
+from scipy import spatial
 import scipy.linalg
 import random
 import matplotlib.pyplot as plt
@@ -153,10 +154,13 @@ def load_test_page(page_name, model):
 def remove_noise(page):
     n = []
     for l in page:
-        image = ndimage.median_filter(l, 2)
+#        image = ndimage.median_filter(l, 2)
+        image = scipy.ndimage.filters.gaussian_filter(l, sigma=1.34)
+        mean = image.mean()
+        mean = np.nan_to_num(mean)
         for i, row in enumerate(image):
             for j, px in enumerate(row):
-                if(px <= 152):
+                if(px <= mean):
                     image[i][j] = 0
                 else:
                     image[i][j] = 255
@@ -180,7 +184,7 @@ def remove_noise(page):
 #    for i in range(len(bboxes) - 1):
 #        word.append(labels[i])
 ##        print(abs(bboxes[i][2]-bboxes[i+1][0]), abs(bboxes[i][3] - bboxes[i+1][1]))
-#        if(abs(bboxes[i][2]-bboxes[i+1][0]) >=7 or abs(bboxes[i][3] - bboxes[i+1][1]) >= 60):
+#        if(abs(bboxes[i][2]-bboxes[i+1][0]) >=6 or abs(bboxes[i][3] - bboxes[i+1][1]) >= 60):
 #            words.append(word)
 #            word = []
 #    word.append(labels[len(labels) - 1])
@@ -188,7 +192,7 @@ def remove_noise(page):
 #
 #    dictionary = enchant.Dict("en_GB")
 #    new_words = []
-#    l = [',',"'",'.','!']
+#    l = [',',"'",'.','!','’',';',':']
 #    for word in words:
 #        w = ''.join(word)
 #        end = []
@@ -201,17 +205,23 @@ def remove_noise(page):
 #        if(len(w) > 0 and dictionary.check(w) == False):
 #            s = dictionary.suggest(w)
 #            sugg = [x for x in s if len(x) == len(w)]
+#
 #            if(len(sugg) == 0):
 ##                print(w, sugg, w)
 #                new_words.append(list(w))
 #            else:
-##                print(w, sugg, sugg[0])
-#                new_words.append(list(sugg[0]))
+#                h = []
+#                for s in sugg:
+#                    count = sum(one != two for one, two in zip(s, w))
+#                    h.append(count)
+#                i = np.argmin(np.array(h))
+#                print(h)
+#                print(w, sugg, sugg[i])
+#                new_words.append(list(sugg[i]))
 #        else:
 #            new_words.append(list(w))
 #        if(len(end) > 0):
 #            new_words.append(list(end))
-#        print(new_words[len(new_words)-1])
 #
 #    letters = []
 #    for word in new_words:
@@ -220,6 +230,7 @@ def remove_noise(page):
 ##    print(np.array(letters).shape)
 ##    print(labels.shape)
 #    return np.array(letters)
+
 def classify_page(page, model):
     """Dummy classifier. Always returns first label.
 
@@ -231,7 +242,7 @@ def classify_page(page, model):
     fvectors_train = np.array(model['fvectors_train'])
     labels_train = np.array(model['labels_train'])
     print("classify")
-    return classify(fvectors_train, labels_train, page, int(page.shape[0]/page.shape[1]))
+    return classify(fvectors_train, labels_train, page, 250)
 
 def classify(train, train_labels, test, k, features=None):
     """Perform nearest neighbour classification."""
@@ -243,17 +254,6 @@ def classify(train, train_labels, test, k, features=None):
     # Select the desired features from the training and test data
     train = train[:, features]
     test = test[:, features]
-    
-    nt = np.unique(train, axis=0)
-
-#    nc = np.copy(train)
-#    for k,x in enumerate(nc):
-#        for i in range(1,2):
-#            rand = random.randrange(5)
-#            nx = np.copy(x)
-#            nx = nx + rand
-#            train = np.append(train, np.expand_dims(nx, axis=0), axis=0)
-#            train_labels = np.append(train_labels, train_labels[k])
 
 
     # Super compact implementation of nearest neighbour
