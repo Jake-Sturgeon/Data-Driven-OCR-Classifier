@@ -9,4 +9,5 @@ python train.py
 
 echo 'Evaluate using both dev and eval data'
 python evaluate.py dev
-python evaluate.py eval
+#python evaluate.py eval
+
