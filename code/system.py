@@ -17,6 +17,7 @@ import scipy.linalg
 import random
 import matplotlib.pyplot as plt
 import enchant
+import itertools
 
 def principal_components(X,num):
     covx = np.cov(X, rowvar=0)
@@ -116,6 +117,15 @@ def process_training_data(train_page_names):
 
     print('Extracting features from training data')
     bbox_size = get_bounding_box_size(images_train)
+
+    k = 1
+    for i, im in enumerate(images_train):
+        if(i % 4 == 0):
+            im = salt_pepper(im, k)
+            k += 1
+        if(k == 4):
+            k = 0
+
     images = remove_noise(images_train)
     fvectors_train_full = images_to_feature_vectors(images, bbox_size)
 
@@ -130,6 +140,20 @@ def process_training_data(train_page_names):
 
     return model_data
 
+def salt_pepper(im,k):
+    ps=k/10
+    pp=k/10
+    n,m=im.shape
+    for i in range(n):
+        for j in range(m):
+            b=np.random.uniform()
+            if b<ps:
+                im[i,j]=0
+            elif b>1-pp:
+                im[i,j]=1
+#    plt.imshow(im,cmap='gray')
+#    plt.show()
+    return im
 
 def load_test_page(page_name, model):
     """Load test data page.
@@ -155,16 +179,19 @@ def remove_noise(page):
     n = []
     for l in page:
 #        image = ndimage.median_filter(l, 2)
+#1.34
+#        image = ndimage.median_filter(l, 1)
         image = scipy.ndimage.filters.gaussian_filter(l, sigma=1.34)
         mean = image.mean()
         mean = np.nan_to_num(mean)
         for i, row in enumerate(image):
             for j, px in enumerate(row):
-                if(px <= mean):
+                if(px <= mean - (mean * 0.15)):
                     image[i][j] = 0
                 else:
                     image[i][j] = 255
-        n.append(image)
+        n.append(l)
+#    print(n[0].mean() + n[0].var()**1/2, n[0].mean() - n[0].var()**1/2)
 #    plt.imshow(n[0],cmap='gray')
 #    plt.show()
     return n
@@ -242,7 +269,7 @@ def classify_page(page, model):
     fvectors_train = np.array(model['fvectors_train'])
     labels_train = np.array(model['labels_train'])
     print("classify")
-    return classify(fvectors_train, labels_train, page, 250)
+    return classify(fvectors_train, labels_train, page,int(page.shape[0]**(1/2)))
 
 def classify(train, train_labels, test, k, features=None):
     """Perform nearest neighbour classification."""
@@ -277,20 +304,6 @@ def classify(train, train_labels, test, k, features=None):
             unique_weights.append(np.sum(weights, axis=0))
         i = np.argmax(np.array(unique_weights))
         labels.append(row[b[i]])
-#        label = []
-#        if(len(a) == 1):
-#            label = a[0]
-#        else:
-#        totals = [0] * len(a)
-#        for i, letter in enumerate(a):
-#            for y in t:
-#                if(y[0] == letter):
-#                    totals[i] += y[1]
-#        totals = np.array(totals)
-#        label = a[np.argmax(totals)]
-
-#        labels = np.append(labels, train_labels[0,:].tolist().index(label))
-#    labels = labels.astype(int)
     return train_labels[labels]
 
 
