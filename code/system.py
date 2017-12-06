@@ -120,10 +120,10 @@ def process_training_data(train_page_names):
 
     k = 1
     for i, im in enumerate(images_train):
-        if(i % 4 == 0):
+        if(i % 3 == 0):
             im = salt_pepper(im, k)
             k += 1
-        if(k == 4):
+        if(k == 3):
             k = 0
 
     images = remove_noise(images_train)
