@@ -1,13 +1,8 @@
-"""Dummy classification system.
+"""Classification system.
 
-Skeleton code for a assignment solution.
+name: Jake Sturgeon
 
-To make a working solution you will need to rewrite parts
-of the code below. In particular, the functions
-reduce_dimensions and classify_page currently have
-dummy implementations that do not do anything useful.
-
-version: v1.0
+version: v2.0
 """
 import numpy as np
 import utils.utils as utils
@@ -18,51 +13,34 @@ import random
 import matplotlib.pyplot as plt
 import enchant
 import itertools
+import warnings
 
-def principal_components(X,num):
+def principal_components(X,n):
+    """Compute the principal components of X to n dimensions
+        source - lab 6
+        
+    Params:
+    X - a matrix where each row is a vector
+    n - used to reduce X to a n-D vector
+    
+    Returns:
+    v - a reduced matrix
+    """
     covx = np.cov(X, rowvar=0)
     N = covx.shape[0]
-    w, v = scipy.linalg.eigh(covx, eigvals=(N - num, N - 1))
+    w, v = scipy.linalg.eigh(covx, eigvals=(N - n, N - 1))
     v = np.fliplr(v)
     return v
 
-def get_ten(X, model):
-    labels = np.array(model['labels_train'])
-    lst = sorted(set(labels))
-    score = np.zeros(X.shape[1])
-    for a, b in [(x,y) for x in range(len(lst)) for y in range(len(lst)) if x < y]:
-    
-        alst = X[labels[:] == lst[a],:]
-        blst = X[labels[:] == lst[b],:]
-        if (alst.shape[0] <= 1 or blst.shape[0] <= 1):
-            continue
-        score = np.add(score, divergence(alst, blst))
-    sorted_score = np.argsort(-score)
-    return sorted_score[0:10]
-
-def divergence(class1, class2):
-    """compute a vector of 1-D divergences
-        
-        class1 - data matrix for class 1, each row is a sample
-        class2 - data matrix for class 2
-        
-        returns: d12 - a vector of 1-D divergence scores
-        """
-    
-    # Compute the mean and variance of each feature vector element
-    m1 = np.mean(class1, axis=0)
-    m2 = np.mean(class2, axis=0)
-    v1 = np.var(class1, axis=0)
-    v2 = np.var(class2, axis=0)
-    # Plug mean and variances into the formula for 1-D divergence.
-    # (Note that / and * are being used to compute multiple 1-D
-    #  divergences without the need for a loop)
-    d12 = 0.5 * (v1 / v2 + v2 / v1 - 2) + 0.5 * ( m1 - m2 ) * (m1 - m2) * (1.0 / v1 + 1.0 / v2)
-    
-    return d12
-
 def get_bounding_box_size(images):
-    """Compute bounding box size given list of images."""
+    """Compute bounding box size given list of images.
+    
+    Params:
+    images - a list of images stored as arrays
+    
+    Returns:
+    height, width - of the images
+    """
     height = max(image.shape[0] for image in images)
     width = max(image.shape[1] for image in images)
     return height, width
@@ -78,6 +56,9 @@ def images_to_feature_vectors(images, bbox_size=None):
     Params:
     images - a list of images stored as arrays
     bbox_size - an optional fixed bounding box size for each image
+    
+    Returns:
+    fvectors - a matrix where each row is a vector
     """
 
     # If no bounding box size is supplied then compute a suitable
@@ -97,15 +78,20 @@ def images_to_feature_vectors(images, bbox_size=None):
         fvectors[i, :] = padded_image.reshape(1, nfeatures)
     return fvectors
 
-
-# The three functions below this point are called by train.py
-# and evaluate.py and need to be provided.
-
 def process_training_data(train_page_names):
     """Perform the training stage and return results in a dictionary.
-
+        
+    This function acts as the training stage. The images are loaded,
+    noise is added to about a third of the data set and is then reduced
+    to simualte the process of noise removal. These images are then
+    turned into vectors and PCA is used to reduce the dimensions to 10.
+    
     Params:
     train_page_names - list of training page names
+    
+    Returns:
+    model_data - a dictionary that contains all the information
+                 needed for the classification stage
     """
     print('Reading data')
     images_train = []
@@ -118,41 +104,71 @@ def process_training_data(train_page_names):
     print('Extracting features from training data')
     bbox_size = get_bounding_box_size(images_train)
 
-    k = 1
-    for i, im in enumerate(images_train):
-        if(i % 3 == 0):
-            im = salt_pepper(im, k)
-            k += 1
-        if(k == 3):
-            k = 0
-
-    images = remove_noise(images_train)
+    print("Simulating noise removal")
+    images = process_noise(images_train)
     fvectors_train_full = images_to_feature_vectors(images, bbox_size)
 
     model_data = dict()
     model_data['labels_train'] = labels_train.tolist()
     model_data['bbox_size'] = bbox_size
-    print('Reducing to 10 dimensions')
+
+    print('Reducing to 10 dimensions via PCA')
     v = principal_components(fvectors_train_full, 11)[:,1:11]
     model_data['v'] = v.tolist()
     model_data['mean'] = np.mean(fvectors_train_full).tolist()
     model_data['fvectors_train'] = np.dot((fvectors_train_full - np.mean(fvectors_train_full)), v).tolist()
 
+    print("Training has finished")
     return model_data
 
-def salt_pepper(im,k):
-    ps=k/10
-    pp=k/10
-    n,m=im.shape
-    for i in range(n):
-        for j in range(m):
-            b=np.random.uniform()
-            if b<ps:
-                im[i,j]=0
-            elif b>1-pp:
-                im[i,j]=1
-#    plt.imshow(im,cmap='gray')
-#    plt.show()
+def process_noise(images):
+    random.seed(1) #1
+    return remove_noise(add_noise(images, 3))
+
+def add_noise(images, n):
+    """ Add noise to some images.
+        
+    This loop is used to add varying levels of noise to about a 1/n of the training data set.
+    This gives the training set knowledge for instances where noise is present
+    
+    Param:
+    images - a list of images stored as arrays
+    n - add varying levels of noise to 1/n of the image set
+    
+    Returns:
+    images - The new set of images
+    """
+    
+    k = 1
+    for i, im in enumerate(images):
+        if(i % n == 0):
+            im = salt_pepper(im, k)
+            k += 1
+        if(k == n):
+            k = 0
+    return images
+
+def salt_pepper(im, k):
+    """ Add salt and pepper noise to image
+        
+    Param:
+    image - an image
+    k - probablity of the pixel being black, white, or no change
+        
+    Returns:
+    image - The new image with added noise
+    """
+    
+    ps = k / 10
+    pp = k / 10
+    # For each pixel, given a random value, change it to black or white
+    for i in range(im.shape[0]):
+        for j in range(im.shape[1]):
+            b = random.randint(0,99)/100
+            if b < ps:
+                im[i, j] = 0
+            elif b > 1 - pp:
+                im[i, j] = 1
     return im
 
 def load_test_page(page_name, model):
@@ -164,7 +180,12 @@ def load_test_page(page_name, model):
     Params:
     page_name - name of page file
     model - dictionary storing data passed from training stage
+    
+    Returns:
+    fvectors_test_reduced - a 10-d feature vector with the vectors
+    stored as rows of a matrix
     """
+    
     bbox_size = model['bbox_size']
     images_test = utils.load_char_images(page_name)
     n = remove_noise(images_test)
@@ -175,12 +196,17 @@ def load_test_page(page_name, model):
     fvectors_test_reduced = np.dot((fvectors_test - mean), v)
     return fvectors_test_reduced
 
-def remove_noise(page):
-    n = []
-    for l in page:
-#        image = ndimage.median_filter(l, 2)
-#1.34
-#        image = ndimage.median_filter(l, 1)
+def remove_noise(pages):
+    """Load test data page.
+        
+    Params:
+    pages - a list of pages
+        
+    Returns:
+    pages - the list of pages after noise removal
+    """
+    warnings.filterwarnings('ignore')
+    for l in pages:
         image = scipy.ndimage.filters.gaussian_filter(l, sigma=1.34)
         mean = image.mean()
         mean = np.nan_to_num(mean)
@@ -190,12 +216,100 @@ def remove_noise(page):
                     image[i][j] = 0
                 else:
                     image[i][j] = 255
-        n.append(l)
-#    print(n[0].mean() + n[0].var()**1/2, n[0].mean() - n[0].var()**1/2)
-#    plt.imshow(n[0],cmap='gray')
-#    plt.show()
-    return n
+        l = image
+    return pages
 
+def classify_page(page, model):
+    """Knn
+
+    Params:
+    page - matrix, each row is a feature vector to be classified
+    model - dictionary, stores the output of the training stage
+    
+    Returns:
+    The classified labels in a vector
+    """
+    fvectors_train = np.array(model['fvectors_train'])
+    labels_train = np.array(model['labels_train'])
+    return classify(fvectors_train, labels_train, page,int(page.shape[0]**(1/2)))
+
+def classify(train, train_labels, test, k):
+    """Knn
+        
+    Params:
+    train - matrix, each row is training data
+    train_labels - vector of the lables
+    test - the data that is being classified
+    k - check the k nearest neighbours
+        
+    Returns:
+    The classified labels in a vector
+    """
+    
+    dists = get_dists(train, test)
+    
+    """ Weighted Knn """
+    kNearest = np.argsort(dists, axis=1)[:, ::-1][:,:k]
+    labels = []
+    w = [1/x for x in range(1,k+1)] # weights
+    for row in kNearest:
+        row_labels = train_labels[row]
+        a, b = np.unique(row_labels, return_index = True)
+        weighted_dists = np.array(list(zip(row_labels, w)))
+        unique_weights = []
+        for unique in a:
+            letters = weighted_dists[weighted_dists[:,0] == unique, :]
+            weights = letters[:, 1].astype(float)
+            unique_weights.append(np.sum(weights, axis=0))
+        i = np.argmax(np.array(unique_weights))
+        labels.append(row[b[i]])
+
+    return train_labels[labels]
+
+def get_dists(train, test, features=None):
+    """returns all the cosine distances
+        
+    Params:
+    train - matrix, each row is training data
+    test - the data that is being classified
+        
+    Returns:
+    dists - matrix of distances
+    """
+    # source - lab 6
+    # Use all feature is no feature parameter has been supplied
+    if features is None:
+        features=np.arange(0, train.shape[1])
+
+    # Select the desired features from the training and test data
+    train = train[:, features]
+    test = test[:, features]
+
+    # Super compact implementation of nearest neighbour
+    x = np.dot(test, train.transpose())
+    modtest=np.sqrt(np.sum(test * test, axis=1))
+    modtrain=np.sqrt(np.sum(train * train, axis=1))
+    x /= np.outer(modtest, modtrain.transpose()) # cosine distance
+    dists = x # make coCal happy
+
+    return dists
+
+"""my attempt at divergence"""
+#def get_ten(X, model):
+#    labels = np.array(model['labels_train'])
+#    lst = sorted(set(labels))
+#    score = np.zeros(X.shape[1])
+#    for a, b in [(x,y) for x in range(len(lst)) for y in range(len(lst)) if x < y]:
+#
+#        alst = X[labels[:] == lst[a],:]
+#        blst = X[labels[:] == lst[b],:]
+#        if (alst.shape[0] <= 1 or blst.shape[0] <= 1):
+#            continue
+#        score = np.add(score, divergence(alst, blst))
+#    sorted_score = np.argsort(-score)
+#    return sorted_score[0:10]
+
+"""my attempt at error correction"""
 #def correct_errors(page, labels, bboxes, model):
 #    """Dummy error correction. Returns labels unchanged.
 #
@@ -242,8 +356,6 @@ def remove_noise(page):
 #                    count = sum(one != two for one, two in zip(s, w))
 #                    h.append(count)
 #                i = np.argmin(np.array(h))
-#                print(h)
-#                print(w, sugg, sugg[i])
 #                new_words.append(list(sugg[i]))
 #        else:
 #            new_words.append(list(w))
@@ -258,54 +370,50 @@ def remove_noise(page):
 ##    print(labels.shape)
 #    return np.array(letters)
 
-def classify_page(page, model):
-    """Dummy classifier. Always returns first label.
 
-    parameters:
 
-    page - matrix, each row is a feature vector to be classified
-    model - dictionary, stores the output of the training stage
-    """
-    fvectors_train = np.array(model['fvectors_train'])
-    labels_train = np.array(model['labels_train'])
-    print("classify")
-    return classify(fvectors_train, labels_train, page,int(page.shape[0]**(1/2)))
 
-def classify(train, train_labels, test, k, features=None):
-    """Perform nearest neighbour classification."""
+
+""" source for code below http://norvig.com/spell-correct.html
     
-    # Use all feature is no feature parameter has been supplied
-    if features is None:
-        features=np.arange(0, train.shape[1])
-
-    # Select the desired features from the training and test data
-    train = train[:, features]
-    test = test[:, features]
-
-
-    # Super compact implementation of nearest neighbour
-    x = np.dot(test, train.transpose())
-    modtest=np.sqrt(np.sum(test * test, axis=1))
-    modtrain=np.sqrt(np.sum(train * train, axis=1))
-    x /= np.outer(modtest, modtrain.transpose()) # cosine distance
-    dist = x
-    nearest = np.argmax(dist, axis=1)
-
-    kNearest = np.argsort(dist, axis=1)[:, ::-1][:,:k]
-    labels = []
-    w = [1/x for x in range(1,k+1)]
-    for row in kNearest:
-        a, b = np.unique(train_labels[row], return_index=True)
-        t = np.array(list(zip(train_labels[row], w)))
-        unique_weights = []
-        for unique in a:
-            ts = t[t[:,0] == unique, :]
-            weights = ts[:, 1].astype(float)
-            unique_weights.append(np.sum(weights, axis=0))
-        i = np.argmax(np.array(unique_weights))
-        labels.append(row[b[i]])
-    return train_labels[labels]
-
+    can be used for error correction but the word returned is sometimes less which loses information
+"""
+#import re
+#from collections import Counter
+#
+#def words(text): return re.findall(r'\w+', text.lower())
+#
+#WORDS = Counter(words(open('big.txt').read()))
+#
+#def P(word, N=sum(WORDS.values())):
+#    "Probability of `word`."
+#    return WORDS[word] / N
+#
+#def correction(word):
+#    "Most probable spelling correction for word."
+#    return max(candidates(word), key=P)
+#
+#def candidates(word):
+#    "Generate possible spelling corrections for word."
+#    return (known([word]) or known(edits1(word)) or known(edits2(word)) or [word])
+#
+#def known(words):
+#    "The subset of `words` that appear in the dictionary of WORDS."
+#    return set(w for w in words if w in WORDS)
+#
+#def edits1(word):
+#    "All edits that are one edit away from `word`."
+#    letters    = 'abcdefghijklmnopqrstuvwxyz'
+#    splits     = [(word[:i], word[i:])    for i in range(len(word) + 1)]
+#    deletes    = [L + R[1:]               for L, R in splits if R]
+#    transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
+#    replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
+#    inserts    = [L + c + R               for L, R in splits for c in letters]
+#    return set(deletes + transposes + replaces + inserts)
+#
+#def edits2(word):
+#    "All edits that are two edits away from `word`."
+#    return (e2 for e1 in edits1(word) for e2 in edits1(e1))
 
 
 
