@@ -11,6 +11,15 @@ brew install enchant
 pip3 install -r requirements.txt
 ```
 
+## Run
+
+```bash
+cd code
+sh run_evaluate.sh
+```
+
+
+
 **_COM2004/3004 Assignment_**
 
 **Due**: 3:00pm on Wednesday 13th December
