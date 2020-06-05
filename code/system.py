@@ -294,83 +294,112 @@ def get_dists(train, test, features=None):
 
     return dists
 
-"""my attempt at divergence"""
-#def get_ten(X, model):
-#    labels = np.array(model['labels_train'])
-#    lst = sorted(set(labels))
-#    score = np.zeros(X.shape[1])
-#    for a, b in [(x,y) for x in range(len(lst)) for y in range(len(lst)) if x < y]:
-#
-#        alst = X[labels[:] == lst[a],:]
-#        blst = X[labels[:] == lst[b],:]
-#        if (alst.shape[0] <= 1 or blst.shape[0] <= 1):
-#            continue
-#        score = np.add(score, divergence(alst, blst))
-#    sorted_score = np.argsort(-score)
-#    return sorted_score[0:10]
+def correct_error(page, labels, bboxes, model):
+    """Error correction
+        
+        parameters:
+        
+        page - 2d array, each row is a feature vector to be classified
+        labels - the output classification label for each feature vector
+        bboxes - 2d array, each row gives the 4 bounding box coords of the character
+        model - dictionary, stores the output of the training stage
+        """
+    #call for my error correciton, produces worse results
+    #return correct_error(page, labels, bboxes, model)
+    return labels
 
 """my attempt at error correction"""
-#def correct_errors(page, labels, bboxes, model):
-#    """Dummy error correction. Returns labels unchanged.
-#
-#        parameters:
-#
-#        page - 2d array, each row is a feature vector to be classified
-#        labels - the output classification label for each feature vector
-#        bboxes - 2d array, each row gives the 4 bounding box coords of the character
-#        model - dictionary, stores the output of the training stage
-#        """
-#    words = []
-#    word = []
-#    for i in range(len(bboxes) - 1):
-#        word.append(labels[i])
-##        print(abs(bboxes[i][2]-bboxes[i+1][0]), abs(bboxes[i][3] - bboxes[i+1][1]))
-#        if(abs(bboxes[i][2]-bboxes[i+1][0]) >=6 or abs(bboxes[i][3] - bboxes[i+1][1]) >= 60):
-#            words.append(word)
-#            word = []
-#    word.append(labels[len(labels) - 1])
-#    words.append(word)
-#
-#    dictionary = enchant.Dict("en_GB")
-#    new_words = []
-#    l = [',',"'",'.','!','’',';',':']
-#    for word in words:
-#        w = ''.join(word)
-#        end = []
-#        if w[len(w) - 1] in l:
-##            print(w, w[len(w) - 1])
-#            end = w[len(w) - 1]
-#            w = w[:len(w) - 1]
-##            print(w)
-#        last = ''
-#        if(len(w) > 0 and dictionary.check(w) == False):
-#            s = dictionary.suggest(w)
-#            sugg = [x for x in s if len(x) == len(w)]
-#
-#            if(len(sugg) == 0):
-##                print(w, sugg, w)
-#                new_words.append(list(w))
-#            else:
-#                h = []
-#                for s in sugg:
-#                    count = sum(one != two for one, two in zip(s, w))
-#                    h.append(count)
-#                i = np.argmin(np.array(h))
-#                new_words.append(list(sugg[i]))
-#        else:
-#            new_words.append(list(w))
-#        if(len(end) > 0):
-#            new_words.append(list(end))
-#
-#    letters = []
-#    for word in new_words:
-#        for char in word:
-#            letters.append(char)
-##    print(np.array(letters).shape)
-##    print(labels.shape)
-#    return np.array(letters)
+def correct_error(page, labels, bboxes, model):
+    """Error correction
 
+        parameters:
 
+        page - 2d array, each row is a feature vector to be classified
+        labels - the output classification label for each feature vector
+        bboxes - 2d array, each row gives the 4 bounding box coords of the character
+        model - dictionary, stores the output of the training stage
+        """
+    words = []
+    word = []
+    for i in range(len(bboxes) - 1):
+        word.append(labels[i])
+        if(abs(bboxes[i][2]-bboxes[i+1][0]) >=6 or abs(bboxes[i][3] - bboxes[i+1][1]) >= 60):
+            words.append(word)
+            word = []
+    word.append(labels[len(labels) - 1])
+    words.append(word)
+
+    dictionary = enchant.Dict("en_GB")
+    new_words = []
+    l = [',',"'",'.','!','’',';',':']
+    for word in words:
+        w = ''.join(word)
+        end = []
+        if w[len(w) - 1] in l:
+            end = w[len(w) - 1]
+            w = w[:len(w) - 1]
+        last = ''
+        if(len(w) > 0 and dictionary.check(w) == False):
+            s = dictionary.suggest(w)
+            sugg = [x for x in s if len(x) == len(w)]
+
+            if(len(sugg) == 0):
+                new_words.append(list(w))
+            else:
+                h = []
+                for s in sugg:
+                    count = sum(one != two for one, two in zip(s, w))
+                    h.append(count)
+                i = np.argmin(np.array(h))
+                new_words.append(list(sugg[i]))
+        else:
+            new_words.append(list(w))
+        if(len(end) > 0):
+            new_words.append(list(end))
+
+    letters = []
+    for word in new_words:
+        for char in word:
+            letters.append(char)
+    return np.array(letters)
+
+"""my attempt at divergence"""
+def get_ten(X, model):
+    labels = np.array(model['labels_train'])
+    lst = sorted(set(labels))
+    score = np.zeros(X.shape[1])
+    for a, b in [(x,y) for x in range(len(lst)) for y in range(len(lst)) if x < y]:
+
+        alst = X[labels[:] == lst[a],:]
+        blst = X[labels[:] == lst[b],:]
+        if (alst.shape[0] <= 1 or blst.shape[0] <= 1):
+            continue
+        score = np.add(score, divergence(alst, blst))
+    sorted_score = np.argsort(-score)
+    return sorted_score[0:10]
+
+# source - lab 6
+def divergence(class1, class2):
+    """compute a vector of 1-D divergences
+
+        class1 - data matrix for class 1, each row is a sample
+        class2 - data matrix for class 2
+
+        returns: d12 - a vector of 1-D divergence scores
+        """
+
+    # Compute the mean and variance of each feature vector element
+    m1 = np.mean(class1, axis=0)
+    m2 = np.mean(class2, axis=0)
+    v1 = np.var(class1, axis=0)
+    v2 = np.var(class2, axis=0)
+
+    # Plug mean and variances into the formula for 1-D divergence.
+    # (Note that / and * are being used to compute multiple 1-D
+    #  divergences without the need for a loop)
+    d12 = 0.5 * (v1 / v2 + v2 / v1 - 2) + 0.5 * ( m1 - m2 ) * (m1 - m2) * (1.0 / v1 + 1.0 / v2)
+
+    return d12
 
 
 
@@ -378,42 +407,42 @@ def get_dists(train, test, features=None):
     
     can be used for error correction but the word returned is sometimes less which loses information
 """
-#import re
-#from collections import Counter
-#
-#def words(text): return re.findall(r'\w+', text.lower())
-#
-#WORDS = Counter(words(open('big.txt').read()))
-#
-#def P(word, N=sum(WORDS.values())):
-#    "Probability of `word`."
-#    return WORDS[word] / N
-#
-#def correction(word):
-#    "Most probable spelling correction for word."
-#    return max(candidates(word), key=P)
-#
-#def candidates(word):
-#    "Generate possible spelling corrections for word."
-#    return (known([word]) or known(edits1(word)) or known(edits2(word)) or [word])
-#
-#def known(words):
-#    "The subset of `words` that appear in the dictionary of WORDS."
-#    return set(w for w in words if w in WORDS)
-#
-#def edits1(word):
-#    "All edits that are one edit away from `word`."
-#    letters    = 'abcdefghijklmnopqrstuvwxyz'
-#    splits     = [(word[:i], word[i:])    for i in range(len(word) + 1)]
-#    deletes    = [L + R[1:]               for L, R in splits if R]
-#    transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
-#    replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
-#    inserts    = [L + c + R               for L, R in splits for c in letters]
-#    return set(deletes + transposes + replaces + inserts)
-#
-#def edits2(word):
-#    "All edits that are two edits away from `word`."
-#    return (e2 for e1 in edits1(word) for e2 in edits1(e1))
+import re
+from collections import Counter
+
+def words(text): return re.findall(r'\w+', text.lower())
+
+WORDS = Counter(words(open('big.txt').read()))
+
+def P(word, N=sum(WORDS.values())):
+    "Probability of `word`."
+    return WORDS[word] / N
+
+def correction(word):
+    "Most probable spelling correction for word."
+    return max(candidates(word), key=P)
+
+def candidates(word):
+    "Generate possible spelling corrections for word."
+    return (known([word]) or known(edits1(word)) or known(edits2(word)) or [word])
+
+def known(words):
+    "The subset of `words` that appear in the dictionary of WORDS."
+    return set(w for w in words if w in WORDS)
+
+def edits1(word):
+    "All edits that are one edit away from `word`."
+    letters    = 'abcdefghijklmnopqrstuvwxyz'
+    splits     = [(word[:i], word[i:])    for i in range(len(word) + 1)]
+    deletes    = [L + R[1:]               for L, R in splits if R]
+    transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
+    replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
+    inserts    = [L + c + R               for L, R in splits for c in letters]
+    return set(deletes + transposes + replaces + inserts)
+
+def edits2(word):
+    "All edits that are two edits away from `word`."
+    return (e2 for e1 in edits1(word) for e2 in edits1(e1))
 
 
 
