@@ -1,5 +1,16 @@
 # Developing an OCR system
 
+
+## Installation
+
+```bash
+brew install enchant
+```
+
+```bash
+pip3 install -r requirements.txt
+```
+
 **_COM2004/3004 Assignment_**
 
 **Due**: 3:00pm on Wednesday 13th December
